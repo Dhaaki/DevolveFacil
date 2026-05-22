@@ -21,6 +21,9 @@ postgres_data/
 rabbitmq_data/
 minio_data/
 
+# Local docs
+GUIA.md
+
 # OS
 .DS_Store
 Thumbs.db
