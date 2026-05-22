@@ -73,7 +73,7 @@ services:
       - Erp__Provider=${ERP_PROVIDER:-Mock}
       - Seed__AdminEmail=${SEED_ADMIN_EMAIL:-admin@lamoda.com.br}
       - Seed__AdminName=${SEED_ADMIN_NAME:-Administrador}
-      - Seed__AdminPassword=${SEED_ADMIN_PASSWORD:-Lamoda@2024!}
+      - Seed__AdminPassword=${SEED_ADMIN_PASSWORD}
       - Seed__AdminRole=${SEED_ADMIN_ROLE:-Supervisor}
     ports:
       - "8080:8080"
