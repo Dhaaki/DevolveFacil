@@ -15,56 +15,35 @@ Plataforma de gestão de devoluções e trocas da La Moda. Permite que clientes 
 
 ## Arquitetura
 
-Monolito modular com arquitetura Hexagonal (Ports & Adapters). O domínio (`Core`) não possui dependências externas — integrações com VTEX, Correios e SAP são implementadas como adapters intercambiáveis, selecionados por configuração.
-
-```
-DevolveFacill/
-├── Src/
-│   ├── DevolveFacill.Core/           # Domínio + casos de uso
-│   ├── DevolveFacill.Api/            # Controllers HTTP + autenticação JWT
-│   ├── DevolveFacill.Infrastructure/ # EF Core + repositórios
-│   ├── DevolveFacill.Adapters/       # VTEX, Correios, SAP, MinIO
-│   └── DevolveFacill.Workers/        # Consumers MassTransit (background)
-└── Frontend/                         # React SPA
-```
+Monolito modular com arquitetura Hexagonal (Ports & Adapters). O domínio (`Core`) não possui dependências externas — integrações com VTEX, Correios e SAP são implementadas como adapters intercambiáveis, selecionados por configuração. Os consumers de filas e o processamento assíncrono ficam em `Workers` (MassTransit + RabbitMQ).
 
 ## Rodando localmente
 
 **Pré-requisitos:** Docker Desktop instalado.
 
 ```bash
-# 1. Copie e configure as variáveis de ambiente
+# 1. Crie o arquivo de variáveis de ambiente
 cp .env.example .env
-# edite o .env com suas credenciais
+# Preencha POSTGRES_PASSWORD, JWT_KEY e SEED_ADMIN_PASSWORD no .env
 
 # 2. Suba todos os serviços
 docker compose up -d
 
-# 3. Acesse
+# 3. Após alterar código do backend, reconstrua
+docker compose up --build api -d
+
+# Interfaces disponíveis
 # Frontend:  http://localhost:3000
 # API:       http://localhost:8080
-# RabbitMQ:  http://localhost:15672  (guest/guest)
-# MinIO:     http://localhost:9001   (minioadmin/minioadmin)
+# RabbitMQ:  http://localhost:15672
+# MinIO:     http://localhost:9001
 ```
 
 O banco de dados é criado automaticamente na primeira execução. Um usuário admin padrão é criado com as credenciais definidas em `SEED_ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD` no `.env`.
 
 ## Desenvolvimento
 
-O projeto usa **GitFlow**:
-
-```
-main       ← produção (só via PR de develop)
-develop    ← integração (só via PR de feature/*)
-feature/*  ← desenvolvimento de funcionalidades
-hotfix/*   ← correções urgentes em produção
-```
-
-Após alterar o código do backend, reconstrua a imagem:
-
-```bash
-docker compose up --build api -d
-```
+Branches seguem GitFlow: `feature/*` → `develop` → `main`, somente via PR.
 
 ## Fluxo de uma devolução
 
@@ -76,9 +55,12 @@ Draft → PendingLabel → LabelGenerated → InTransit → Delivered
                                      PendingRefund / PendingVoucher / ClosedRejected
                                                          ↓
                                           ClosedRefund / ClosedExchange
+
+Qualquer estado → Cancelled (cancelamento pelo cliente ou admin)
+Qualquer estado → Error     (falha que exige intervenção manual)
 ```
 
-Transitions inválidas são bloqueadas pelo `ReturnRequestStateMachine`. Cada transição gera um `ReturnEvent` imutável — trilha de auditoria completa.
+Transições inválidas são bloqueadas pelo `ReturnRequestStateMachine`. Cada transição gera um `ReturnEvent` imutável — trilha de auditoria completa.
 
 ## Integrações
 
@@ -89,17 +71,4 @@ Transitions inválidas são bloqueadas pelo `ReturnRequestStateMachine`. Cada tr
 | SAP S/4HANA (ERP) | `SapErpIntegration` | Fase 4 |
 | MinIO / AWS S3 (arquivos) | `S3StorageService` | Implementado |
 
-Em desenvolvimento, todas as integrações usam adapters `Mock` configurados via `.env`.
-
-## Variáveis de ambiente
-
-Veja `.env.example` para a lista completa. As principais:
-
-| Variável | Descrição |
-|---|---|
-| `POSTGRES_PASSWORD` | Senha do banco de dados |
-| `JWT_KEY` | Chave secreta para assinar tokens (mín. 32 chars) |
-| `COMMERCE_PROVIDER` | `Mock` ou `Vtex` |
-| `CARRIER_PROVIDER` | `Mock` ou `Correios` |
-| `ERP_PROVIDER` | `Mock` ou `Sap` |
-| `STORAGE_PROVIDER` | `Mock` ou `S3` |
+Em desenvolvimento, todas as integrações usam adapters `Mock` configurados via `COMMERCE_PROVIDER`, `CARRIER_PROVIDER`, `ERP_PROVIDER` e `STORAGE_PROVIDER` no `.env`.
