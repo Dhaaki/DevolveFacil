@@ -51,7 +51,7 @@ export default function LoginPage() {
           <img
             src={logo}
             alt="DevolveFacil"
-            className="h-28 w-auto object-contain animate-bounce-subtle"
+            className="h-36 w-auto object-contain animate-bounce-subtle"
           />
           <div className="text-center">
             <h1 className="text-2xl font-bold font-display text-candy-on-surface tracking-tight">
