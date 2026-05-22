@@ -1,0 +1,25 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+*.suo
+.idea/
+
+# Environment
+.env
+appsettings.Development.json
+appsettings.Local.json
+
+# Node / Frontend
+Frontend/node_modules/
+Frontend/dist/
+
+# Docker volumes (if accidentally committed)
+postgres_data/
+rabbitmq_data/
+minio_data/
+
+# OS
+.DS_Store
+Thumbs.db

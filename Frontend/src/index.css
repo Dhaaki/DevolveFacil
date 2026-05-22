@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Outfit:wght@400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --candy-bg: #fffbf9;
+  --candy-surface: #ffffff;
+  --candy-surface-variant: #fcf4f2;
+  --candy-primary: #f43f5e;
+  --candy-secondary: #f97316;
+  --candy-tertiary: #8b5cf6;
+  --candy-on-surface: #1e1b4b;
+  --candy-on-surface-variant: #64748b;
+}
+
+.dark {
+  --candy-bg: #0b0e14;
+  --candy-surface: #131720;
+  --candy-surface-variant: #1c2230;
+  --candy-on-surface: #f1f5f9;
+  --candy-on-surface-variant: #94a3b8;
+}
+
+@layer base {
+  body {
+    @apply bg-candy-bg text-candy-on-surface font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .hover-bounce {
+    @apply transition-all duration-300;
+  }
+  .hover-bounce:hover {
+    @apply -translate-y-1 scale-[1.02];
+  }
+  .active-shrink {
+    @apply active:scale-95 transition-transform;
+  }
+  .candy-shadow {
+    box-shadow: 0 10px 40px -10px rgba(244, 63, 94, 0.15);
+  }
+  .candy-shadow-sm {
+    box-shadow: 0 4px 20px -5px rgba(244, 63, 94, 0.10);
+  }
+  .candy-glow {
+    box-shadow: 0 8px 32px -8px rgba(244, 63, 94, 0.35);
+  }
+}
