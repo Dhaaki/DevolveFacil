@@ -243,8 +243,9 @@ using (var scope = app.Services.CreateScope())
     if (!await db.AdminUsers.AnyAsync())
     {
         var seedEmail = app.Configuration["Seed:AdminEmail"] ?? "admin@lamoda.com.br";
-        var seedPassword = app.Configuration["Seed:AdminPassword"]
-            ?? throw new InvalidOperationException("Seed:AdminPassword is required");
+        var seedPassword = app.Configuration["Seed:AdminPassword"];
+        if (string.IsNullOrWhiteSpace(seedPassword))
+            throw new InvalidOperationException("Seed:AdminPassword is required and must not be empty.");
 
         db.AdminUsers.Add(new AdminUser
         {

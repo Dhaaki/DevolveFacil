@@ -1,5 +1,4 @@
 using Asp.Versioning;
-using System.Security.Cryptography;
 using DevolveFacill.Api.Auth;
 using DevolveFacill.Api.DTOs;
 using DevolveFacill.Core.Domain.Entities;
@@ -16,8 +15,7 @@ namespace DevolveFacill.Api.Controllers;
 public class AdminAuthController(
     AppDbContext db,
     JwtService jwt,
-    AdminRefreshTokenRepository adminTokens,
-    IConfiguration config) : ControllerBase
+    AdminRefreshTokenRepository adminTokens) : ControllerBase
 {
     [HttpPost("login")]
     [ProducesResponseType(200)]
@@ -31,15 +29,14 @@ public class AdminAuthController(
             return Unauthorized(new { error = "Email ou senha inválidos." });
 
         var accessToken = jwt.GenerateAccessToken(admin.Id, admin.Role, admin.Name);
-        var refreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-        var refreshDays = int.Parse(config["Jwt:RefreshTokenExpiryDays"] ?? "7");
+        var refreshToken = JwtService.GenerateRefreshToken();
 
         await adminTokens.SaveAsync(new AdminRefreshToken
         {
             Id = Guid.NewGuid(),
             AdminUserId = admin.Id,
             Token = refreshToken,
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(refreshDays),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(jwt.RefreshTokenExpiryDays),
             CreatedAt = DateTimeOffset.UtcNow
         }, ct);
 
@@ -57,15 +54,14 @@ public class AdminAuthController(
         await adminTokens.RevokeAsync(stored, ct);
 
         var newAccess = jwt.GenerateAccessToken(stored.AdminUser.Id, stored.AdminUser.Role, stored.AdminUser.Name);
-        var newRefresh = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-        var refreshDays = int.Parse(config["Jwt:RefreshTokenExpiryDays"] ?? "7");
+        var newRefresh = JwtService.GenerateRefreshToken();
 
         await adminTokens.SaveAsync(new AdminRefreshToken
         {
             Id = Guid.NewGuid(),
             AdminUserId = stored.AdminUserId,
             Token = newRefresh,
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(refreshDays),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(jwt.RefreshTokenExpiryDays),
             CreatedAt = DateTimeOffset.UtcNow
         }, ct);
 
