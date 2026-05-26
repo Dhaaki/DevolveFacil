@@ -16,6 +16,8 @@ using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Asp.Versioning;
+using Microsoft.OpenApi.Models;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -163,6 +165,19 @@ builder.Services.AddControllers()
             new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>();
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddApiVersioning(opt =>
+{
+    opt.DefaultApiVersion = new ApiVersion(1, 0);
+    opt.AssumeDefaultVersionWhenUnspecified = true;
+    opt.ReportApiVersions = true;
+    opt.ApiVersionReader = new UrlSegmentApiVersionReader();
+}).AddApiExplorer(opt =>
+{
+    opt.GroupNameFormat = "'v'VVV";
+    opt.SubstituteApiVersionInUrl = true;
+});
 
 var app = builder.Build();
 
