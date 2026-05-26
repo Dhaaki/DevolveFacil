@@ -13,6 +13,7 @@ public class JwtService(IConfiguration config)
     private readonly string _issuer = config["Jwt:Issuer"] ?? "devolvefacill-api";
     private readonly string _audience = config["Jwt:Audience"] ?? "devolvefacill-client";
     private readonly int _accessMinutes = int.Parse(config["Jwt:AccessTokenExpiryMinutes"] ?? "15");
+    public int RefreshTokenExpiryDays { get; } = int.Parse(config["Jwt:RefreshTokenExpiryDays"] ?? "7");
 
     public string GenerateAccessToken(Guid subjectId, string role, string name)
     {
