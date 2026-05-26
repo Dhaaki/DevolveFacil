@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using System.Security.Claims;
 using DevolveFacill.Api.DTOs;
 using DevolveFacill.Core.Domain;
@@ -14,7 +15,8 @@ using Microsoft.EntityFrameworkCore;
 namespace DevolveFacill.Api.Controllers;
 
 [ApiController]
-[Route("api/customer/returns")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/customer/returns")]
 [Authorize(Roles = "customer")]
 public class CustomerReturnsController(
     CustomerRepository customers,
@@ -24,6 +26,9 @@ public class CustomerReturnsController(
     IPublishEndpoint publisher) : ControllerBase
 {
     [HttpPost]
+    [ProducesResponseType(201)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> CreateReturn([FromBody] CreateReturnRequestDto dto, CancellationToken ct)
     {
         var customer = await GetCustomerAsync(ct);
@@ -57,6 +62,7 @@ public class CustomerReturnsController(
     }
 
     [HttpGet]
+    [ProducesResponseType(200)]
     public async Task<IActionResult> ListReturns(CancellationToken ct)
     {
         var customer = await GetCustomerAsync(ct);
@@ -69,6 +75,8 @@ public class CustomerReturnsController(
     }
 
     [HttpGet("{returnId:guid}")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> GetReturn(Guid returnId, CancellationToken ct)
     {
         var customer = await GetCustomerAsync(ct);
@@ -82,6 +90,8 @@ public class CustomerReturnsController(
     }
 
     [HttpGet("{returnId:guid}/label")]
+    [ProducesResponseType(302)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> GetLabel(Guid returnId, CancellationToken ct)
     {
         var customer = await GetCustomerAsync(ct);
@@ -96,6 +106,8 @@ public class CustomerReturnsController(
     }
 
     [HttpPost("{returnId:guid}/confirm-posted")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> ConfirmPosted(Guid returnId, CancellationToken ct)
     {
         var customer = await GetCustomerAsync(ct);

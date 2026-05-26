@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using DevolveFacill.Api.Auth;
 using DevolveFacill.Api.DTOs;
 using DevolveFacill.Infrastructure.Persistence;
@@ -7,10 +8,13 @@ using Microsoft.EntityFrameworkCore;
 namespace DevolveFacill.Api.Controllers;
 
 [ApiController]
-[Route("api/auth/admin")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/auth/admin")]
 public class AdminAuthController(AppDbContext db, JwtService jwt) : ControllerBase
 {
     [HttpPost("login")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(401)]
     public async Task<ActionResult<AuthResponse>> Login([FromBody] AdminLoginRequest req, CancellationToken ct)
     {
         var admin = await db.AdminUsers.FirstOrDefaultAsync(

@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using System.Security.Claims;
 using DevolveFacill.Api.DTOs;
 using DevolveFacill.Core.Domain;
@@ -16,7 +17,8 @@ using Microsoft.EntityFrameworkCore;
 namespace DevolveFacill.Api.Controllers;
 
 [ApiController]
-[Route("api/admin/returns")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/admin/returns")]
 [Authorize(Roles = "Agent,QualityInspector,Finance,Supervisor")]
 public class AdminReturnsController(
     ReturnRequestRepository returns,
@@ -25,6 +27,7 @@ public class AdminReturnsController(
     IStorageService storage) : ControllerBase
 {
     [HttpGet]
+    [ProducesResponseType(200)]
     public async Task<IActionResult> List(
         [FromQuery] ReturnStatus? status,
         [FromQuery] string? carrier,
@@ -41,6 +44,7 @@ public class AdminReturnsController(
     }
 
     [HttpGet("stats")]
+    [ProducesResponseType(200)]
     public async Task<IActionResult> Stats(CancellationToken ct)
     {
         var raw = await returns.GetStatsAsync(ct);
@@ -48,6 +52,8 @@ public class AdminReturnsController(
     }
 
     [HttpGet("{returnId:guid}")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> Get(Guid returnId, CancellationToken ct)
     {
         var r = await returns.FindByIdAsync(returnId, ct);
@@ -70,6 +76,8 @@ public class AdminReturnsController(
 
     [HttpPatch("{returnId:guid}/quality")]
     [Authorize(Roles = "QualityInspector,Supervisor")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> AssessQuality(
         Guid returnId, [FromBody] QualityAssessmentDto dto, CancellationToken ct)
     {
@@ -87,6 +95,8 @@ public class AdminReturnsController(
     // Directly creates the shipment + transitions PendingLabel → LabelGenerated without going through RabbitMQ.
     [HttpPost("{returnId:guid}/simulate-label")]
     [Authorize(Roles = "Supervisor")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> SimulateLabel(Guid returnId, CancellationToken ct)
     {
         // Load ReturnRequest only (no navigation includes) to keep the change tracker minimal
@@ -134,6 +144,8 @@ public class AdminReturnsController(
     // Directly transitions InTransit → Delivered without going through RabbitMQ.
     [HttpPost("{returnId:guid}/simulate-delivery")]
     [Authorize(Roles = "Supervisor")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> SimulateDelivery(Guid returnId, CancellationToken ct)
     {
         var r = await db.ReturnRequests.FirstOrDefaultAsync(r => r.Id == returnId, ct);
@@ -159,6 +171,8 @@ public class AdminReturnsController(
 
     [HttpPost("{returnId:guid}/cancel")]
     [Authorize(Roles = "Supervisor,Agent")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> Cancel(Guid returnId, CancellationToken ct)
     {
         var r = await returns.FindByIdAsync(returnId, ct);

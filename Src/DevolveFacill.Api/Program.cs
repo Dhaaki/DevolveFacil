@@ -151,12 +151,21 @@ builder.Services.AddHostedService<TrackingPollerService>();
 // ── CORS ──────────────────────────────────────────────────────────────────────
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? ["http://localhost:5173"];
+var consumerOrigins = builder.Configuration.GetSection("Cors:ConsumerOrigins").Get<string[]>()
+    ?? [];
+var mergedOrigins = allowedOrigins.Concat(consumerOrigins).ToArray();
 
-builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
-    p.WithOrigins(allowedOrigins)
-     .AllowAnyHeader()
-     .AllowAnyMethod()
-     .AllowCredentials()));
+builder.Services.AddCors(opt =>
+{
+    opt.AddPolicy("FrontendPolicy", p =>
+        p.WithOrigins(mergedOrigins)
+         .AllowAnyHeader()
+         .AllowAnyMethod());
+    opt.AddPolicy("WebhookPolicy", p =>
+        p.AllowAnyOrigin()
+         .AllowAnyHeader()
+         .WithMethods("POST"));
+});
 
 // ── Controllers + Health ──────────────────────────────────────────────────────
 builder.Services.AddControllers()
@@ -183,7 +192,7 @@ var app = builder.Build();
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseSerilogRequestLogging();
-app.UseCors();
+app.UseCors("FrontendPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
