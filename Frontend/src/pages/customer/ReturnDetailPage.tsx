@@ -142,7 +142,7 @@ export default function ReturnDetailPage() {
         {/* Label download */}
         {['LabelGenerated', 'InTransit', 'Delivered'].includes(data.status) && (
           <a
-            href={`/api/customer/returns/${data.id}/label`}
+            href={`/api/v1/customer/returns/${data.id}/label`}
             target="_blank"
             rel="noreferrer"
             className="block w-full text-center text-sm font-medium text-candy-primary border border-candy-border rounded-xl py-2.5 bg-white hover:bg-candy-bg transition-colors"
