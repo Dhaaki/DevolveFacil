@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using System.Security.Claims;
 using DevolveFacill.Core.Domain.Entities;
 using DevolveFacill.Core.Ports;
@@ -9,7 +10,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace DevolveFacill.Api.Controllers;
 
 [ApiController]
-[Route("api/customer/orders")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/customer/orders")]
 [Authorize(Roles = "customer")]
 public class CustomerOrdersController(
     CustomerRepository customers,
@@ -17,6 +19,8 @@ public class CustomerOrdersController(
     ICommercePlatform commerce) : ControllerBase
 {
     [HttpGet]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(401)]
     public async Task<IActionResult> ListOrders(CancellationToken ct)
     {
         var customer = await GetCustomerAsync(ct);
@@ -28,6 +32,8 @@ public class CustomerOrdersController(
     }
 
     [HttpGet("{externalOrderId}")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> GetOrder(string externalOrderId, CancellationToken ct)
     {
         var order = await orders.FindByExternalIdAsync(externalOrderId, ct);

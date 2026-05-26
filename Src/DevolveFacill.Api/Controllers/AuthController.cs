@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using DevolveFacill.Api.Auth;
 using DevolveFacill.Api.DTOs;
 using DevolveFacill.Core.Domain.Entities;
@@ -8,7 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace DevolveFacill.Api.Controllers;
 
 [ApiController]
-[Route("api/auth")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/auth")]
 public class AuthController(
     CustomerRepository customers,
     JwtService jwt,
@@ -16,6 +18,8 @@ public class AuthController(
     IConfiguration config) : ControllerBase
 {
     [HttpPost("customer/login")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(401)]
     public async Task<ActionResult<AuthResponse>> CustomerLogin([FromBody] CustomerLoginRequest req, CancellationToken ct)
     {
         // Normalize: strip mask characters so "123.456.789-00" == "12345678900"
@@ -69,6 +73,8 @@ public class AuthController(
     }
 
     [HttpPost("refresh")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(401)]
     public async Task<ActionResult<AuthResponse>> Refresh([FromBody] RefreshTokenRequest req, CancellationToken ct)
     {
         var stored = await customers.FindRefreshTokenAsync(req.RefreshToken, ct);

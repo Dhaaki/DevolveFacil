@@ -16,6 +16,8 @@ using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Asp.Versioning;
+using Microsoft.OpenApi.Models;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +38,7 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 builder.Services.AddScoped<CustomerRepository>();
 builder.Services.AddScoped<OrderRepository>();
 builder.Services.AddScoped<ReturnRequestRepository>();
+builder.Services.AddScoped<AdminRefreshTokenRepository>();
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -149,12 +152,21 @@ builder.Services.AddHostedService<TrackingPollerService>();
 // ── CORS ──────────────────────────────────────────────────────────────────────
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? ["http://localhost:5173"];
+var consumerOrigins = builder.Configuration.GetSection("Cors:ConsumerOrigins").Get<string[]>()
+    ?? [];
+var mergedOrigins = allowedOrigins.Concat(consumerOrigins).ToArray();
 
-builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
-    p.WithOrigins(allowedOrigins)
-     .AllowAnyHeader()
-     .AllowAnyMethod()
-     .AllowCredentials()));
+builder.Services.AddCors(opt =>
+{
+    opt.AddPolicy("FrontendPolicy", p =>
+        p.WithOrigins(mergedOrigins)
+         .AllowAnyHeader()
+         .AllowAnyMethod());
+    opt.AddPolicy("WebhookPolicy", p =>
+        p.AllowAnyOrigin()
+         .AllowAnyHeader()
+         .WithMethods("POST"));
+});
 
 // ── Controllers + Health ──────────────────────────────────────────────────────
 builder.Services.AddControllers()
@@ -164,11 +176,57 @@ builder.Services.AddControllers()
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>();
 
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddApiVersioning(opt =>
+{
+    opt.DefaultApiVersion = new ApiVersion(1, 0);
+    opt.AssumeDefaultVersionWhenUnspecified = true;
+    opt.ReportApiVersions = true;
+    opt.ApiVersionReader = new UrlSegmentApiVersionReader();
+}).AddApiExplorer(opt =>
+{
+    opt.GroupNameFormat = "'v'VVV";
+    opt.SubstituteApiVersionInUrl = true;
+});
+
+builder.Services.AddSwaggerGen(opt =>
+{
+    opt.SwaggerDoc("v1", new OpenApiInfo { Title = "DevolveFacil API", Version = "v1" });
+
+    opt.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header
+    });
+    opt.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            []
+        }
+    });
+
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, "DevolveFacill.Api.xml");
+    if (File.Exists(xmlPath))
+        opt.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+});
+
 var app = builder.Build();
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseSerilogRequestLogging();
-app.UseCors();
+app.UseCors("FrontendPolicy");
+if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "DevolveFacil API v1"));
+}
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -179,20 +237,15 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    // EnsureCreatedAsync creates all tables from the EF model without requiring
-    // migration files. Switch to MigrateAsync() once migrations are generated:
-    //   docker run --rm -v $(pwd):/src mcr.microsoft.com/dotnet/sdk:8.0 \
-    //     dotnet ef migrations add InitialCreate --project Src/DevolveFacill.Infrastructure \
-    //     --startup-project Src/DevolveFacill.Api
-    if (app.Environment.IsDevelopment())
-        await db.Database.EnsureCreatedAsync();
+    await db.Database.MigrateAsync();
 
     // Seed default Supervisor admin on first run (idempotent)
     if (!await db.AdminUsers.AnyAsync())
     {
         var seedEmail = app.Configuration["Seed:AdminEmail"] ?? "admin@lamoda.com.br";
-        var seedPassword = app.Configuration["Seed:AdminPassword"]
-            ?? throw new InvalidOperationException("Seed:AdminPassword is required");
+        var seedPassword = app.Configuration["Seed:AdminPassword"];
+        if (string.IsNullOrWhiteSpace(seedPassword))
+            throw new InvalidOperationException("Seed:AdminPassword is required and must not be empty.");
 
         db.AdminUsers.Add(new AdminUser
         {

@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using DevolveFacill.Core.Ports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -5,7 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace DevolveFacill.Api.Controllers;
 
 [ApiController]
-[Route("api/uploads")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/uploads")]
 [Authorize]
 public class UploadsController(IStorageService storage) : ControllerBase
 {
@@ -14,6 +16,8 @@ public class UploadsController(IStorageService storage) : ControllerBase
 
     [HttpPost("damage-images")]
     [Authorize(Roles = "QualityInspector,Supervisor")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
     public async Task<IActionResult> UploadDamageImages(
         [FromForm] IFormFileCollection files, CancellationToken ct)
     {
