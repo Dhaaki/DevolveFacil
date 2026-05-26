@@ -38,6 +38,7 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 builder.Services.AddScoped<CustomerRepository>();
 builder.Services.AddScoped<OrderRepository>();
 builder.Services.AddScoped<ReturnRequestRepository>();
+builder.Services.AddScoped<AdminRefreshTokenRepository>();
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -188,11 +189,44 @@ builder.Services.AddApiVersioning(opt =>
     opt.SubstituteApiVersionInUrl = true;
 });
 
+builder.Services.AddSwaggerGen(opt =>
+{
+    opt.SwaggerDoc("v1", new OpenApiInfo { Title = "DevolveFacil API", Version = "v1" });
+
+    opt.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header
+    });
+    opt.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            []
+        }
+    });
+
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, "DevolveFacill.Api.xml");
+    if (File.Exists(xmlPath))
+        opt.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+});
+
 var app = builder.Build();
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseCors("FrontendPolicy");
+if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "DevolveFacil API v1"));
+}
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -203,13 +237,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    // EnsureCreatedAsync creates all tables from the EF model without requiring
-    // migration files. Switch to MigrateAsync() once migrations are generated:
-    //   docker run --rm -v $(pwd):/src mcr.microsoft.com/dotnet/sdk:8.0 \
-    //     dotnet ef migrations add InitialCreate --project Src/DevolveFacill.Infrastructure \
-    //     --startup-project Src/DevolveFacill.Api
-    if (app.Environment.IsDevelopment())
-        await db.Database.EnsureCreatedAsync();
+    await db.Database.MigrateAsync();
 
     // Seed default Supervisor admin on first run (idempotent)
     if (!await db.AdminUsers.AnyAsync())
