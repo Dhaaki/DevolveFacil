@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "3.3",
+  "metadata": {
+    "title": "feat: API-First Platform — Frontend Migration",
+    "type": "feat",
+    "branchName": "feat/api-first-platform-frontend",
+    "createdAt": "2026-05-22",
+    "planPath": null,
+    "brainstormPath": ".aimi/brainstorms/2026-05-22-api-first-platform-brainstorm.md",
+    "researchDepth": "standard",
+    "researchPaths": [
+      ".aimi/research/2026-05-22-api-first-platform-164730-best-practices.md",
+      ".aimi/research/2026-05-22-api-first-platform-170739-learnings.md"
+    ],
+    "decisions": [
+      {
+        "anchor": "specFlow:CriticalQ3",
+        "source": "specFlow:CriticalQ3",
+        "text": "Should WebhooksController be excluded from URL versioning?",
+        "resolution": "Version webhooks too (/api/v1/webhooks/...) — adapters are mocked in Phase 3, no real carrier registrations to break"
+      },
+      {
+        "anchor": "specFlow:CriticalQ5",
+        "source": "specFlow:CriticalQ5",
+        "text": "When backend versioning is deployed, must both backend and frontend deploy together, or should old routes stay alive temporarily?",
+        "resolution": "Coordinated deploy — old /api/... routes removed immediately, no compatibility aliases"
+      },
+      {
+        "anchor": "specFlow:CriticalQ6",
+        "source": "specFlow:CriticalQ6",
+        "text": "Should admin users get refresh tokens so internal tools do not force re-login every 15 minutes?",
+        "resolution": "Add admin refresh tokens matching customer flow — implemented in backend US-006"
+      }
+    ],
+    "maxConcurrency": 5
+  },
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Update React Axios client to use versioned API path",
+      "description": "As a La Moda frontend developer, I want the Axios base URL changed from '/api' to '/api/v1' so that the React app calls versioned backend endpoints after the coordinated deploy with the backend team.",
+      "acceptanceCriteria": [
+        "Frontend/src/lib/api.ts contains baseURL: '/api/v1' replacing the previous '/api' value",
+        "No .ts or .tsx file in Frontend/src/ contains a hardcoded '/api/' path string — verified by grep returning no matches outside api.ts itself",
+        "Frontend/src/pages/customer/ReturnDetailPage.tsx line 145 href attribute reads /api/v1/customer/returns/${data.id}/label — this is a browser anchor tag for PDF label download that bypasses Axios and must be updated separately from api.ts",
+        "Frontend/vite.config.ts proxy key remains '/api' unchanged — a prefix match that already covers /api/v1/... without modification",
+        "All API call paths in page components use relative paths (e.g. '/auth/customer/login') without embedding the '/api/' segment",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "status": "completed",
+      "dependsOn": [],
+      "notes": "Must be deployed in the same release as backend US-002 and US-003 (coordinated deploy decision). Deploying this story alone will break the app because the backend will still serve the old unversioned routes until US-003 is live.\n\nCRITICAL: ReturnDetailPage.tsx line 145 contains a hardcoded browser anchor href that bypasses Axios entirely. This is a PDF label download link and is NOT covered by the baseURL change in api.ts. It must be updated to /api/v1/customer/returns/${data.id}/label as a separate edit. The grep check will catch this if missed.",
+      "wave": 1,
+      "implementation": {
+        "files": [
+          "Frontend/src/lib/api.ts",
+          "Frontend/src/pages/customer/ReturnDetailPage.tsx"
+        ],
+        "approach": "Two-file change: (1) In api.ts, change baseURL from '/api' to '/api/v1' in the axios.create call. (2) In ReturnDetailPage.tsx line 145, update the hardcoded href from /api/customer/returns/${data.id}/label to /api/v1/customer/returns/${data.id}/label. The Vite proxy key '/api' covers '/api/v1/...' as a prefix match — no vite.config.ts change is needed.",
+        "verify": "cd Frontend && npx tsc --noEmit"
+      },
+      "verification": {
+        "strategy": "test",
+        "status": "pending",
+        "expect": "tsc --noEmit exits 0 and grep finds no hardcoded /api/ paths in component files other than the updated /api/v1/ references"
+      },
+      "tasks": [
+        "Open Frontend/src/lib/api.ts and change baseURL from '/api' to '/api/v1' in the axios.create call",
+        "Open Frontend/src/pages/customer/ReturnDetailPage.tsx and update line 145: change href to use /api/v1/customer/returns/${data.id}/label instead of /api/customer/returns/${data.id}/label",
+        "Run grep -rn '/api/' Frontend/src --include='*.ts' --include='*.tsx' and confirm no results reference a non-v1 /api/ path",
+        "Open Frontend/vite.config.ts and verify the proxy key '/api' is NOT changed — leave it as-is",
+        "Run cd Frontend && npx tsc --noEmit to confirm typecheck passes"
+      ]
+    }
+  ]
+}

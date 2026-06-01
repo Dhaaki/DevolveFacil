@@ -1,0 +1,305 @@
+# ============================================================
+# DevolveFacil API — Testes de Endpoints
+# ============================================================
+# Como usar:
+#   VS Code: instale a extensão "REST Client" (humao.rest-client)
+#             depois clique em "Send Request" acima de cada chamada
+#
+#   cURL: copie o bloco e rode no terminal
+#
+# IMPORTANTE: rode o Login (Admin ou Cliente) primeiro,
+#             depois cole o token recebido nas variáveis abaixo.
+# ============================================================
+
+@base = http://localhost:8080
+@admin_token = COLE_O_ACCESS_TOKEN_DO_ADMIN_AQUI
+@customer_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNDkxNjZhYi0xMWU2LTQ5OGQtOTllNy1kMzJkY2ZhNTFmNWIiLCJqdGkiOiI0ZjJmM2NlYS1kYWUyLTQ3NWUtYjczNi1lZjlhYWMzODUxOTQiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJjdXN0b21lciIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL25hbWUiOiJDbGllbnRlIFRlc3RlIiwiZXhwIjoxNzc5ODI3MzQzLCJpc3MiOiJkZXZvbHZlZmFjaWxsLWFwaSIsImF1ZCI6ImRldm9sdmVmYWNpbGwtY2xpZW50In0.c9K7pMHaTkD4PfEXifMDRtc8-Kebcdh50Zd39D3BQyw
+@return_id = COLE_O_ID_DA_DEVOLUCAO_AQUI
+@order_id = COLE_O_EXTERNAL_ORDER_ID_AQUI
+
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+### Health check — API está no ar?
+# curl http://localhost:8080/health
+GET {{base}}/health
+
+
+# ============================================================
+# AUTENTICAÇÃO — ADMIN
+# ============================================================
+
+### Login do admin → copie o accessToken e cole em @admin_token
+# curl -X POST http://localhost:8080/api/v1/auth/admin/login \
+#   -H "Content-Type: application/json" \
+#   -d '{"email":"admin@lamoda.com.br","password":"SUA_SENHA_AQUI"}'
+POST {{base}}/api/v1/auth/admin/login
+Content-Type: application/json
+
+{
+  "email": "admin@lamoda.com.br",
+  "password": "SUA_SENHA_AQUI"
+}
+
+
+### Renovar token do admin (refresh token rotation)
+# curl -X POST http://localhost:8080/api/v1/auth/admin/refresh \
+#   -H "Content-Type: application/json" \
+#   -d '{"refreshToken":"COLE_O_REFRESH_TOKEN_AQUI"}'
+POST {{base}}/api/v1/auth/admin/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "COLE_O_REFRESH_TOKEN_AQUI"
+}
+
+
+# ============================================================
+# AUTENTICAÇÃO — CLIENTE
+# ============================================================
+
+### Login do cliente (CPF + senha) → copie o accessToken e cole em @customer_token
+# curl -X POST http://localhost:8080/api/v1/auth/customer/login \
+#   -H "Content-Type: application/json" \
+#   -d '{"cpf":"12345678900","password":"senha123"}'
+POST {{base}}/api/v1/auth/customer/login
+Content-Type: application/json
+
+{
+  "cpf": "12345678900",
+  "password": "senha123"
+}
+
+
+### Renovar token do cliente
+# curl -X POST http://localhost:8080/api/v1/auth/refresh \
+#   -H "Content-Type: application/json" \
+#   -d '{"refreshToken":"COLE_O_REFRESH_TOKEN_AQUI"}'
+POST {{base}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "COLE_O_REFRESH_TOKEN_AQUI"
+}
+
+
+# ============================================================
+# PEDIDOS DO CLIENTE
+# ============================================================
+
+### Listar pedidos elegíveis para devolução
+# curl http://localhost:8080/api/v1/customer/orders \
+#   -H "Authorization: Bearer $CUSTOMER_TOKEN"
+GET {{base}}/api/v1/customer/orders
+Authorization: Bearer {{customer_token}}
+
+
+### Detalhe de um pedido específico
+# curl http://localhost:8080/api/v1/customer/orders/EXTERNAL_ORDER_ID \
+#   -H "Authorization: Bearer $CUSTOMER_TOKEN"
+GET {{base}}/api/v1/customer/orders/{{order_id}}
+Authorization: Bearer {{customer_token}}
+
+
+# ============================================================
+# DEVOLUÇÕES — CLIENTE
+# ============================================================
+
+### Criar devolução
+# curl -X POST http://localhost:8080/api/v1/customer/returns \
+#   -H "Authorization: Bearer $CUSTOMER_TOKEN" \
+#   -H "Content-Type: application/json" \
+#   -d '{"externalOrderId":"ORDER123","items":[{"orderItemId":"ITEM_ID","quantityReturned":1,"reason":"Produto com defeito"}],"resolutionType":"Refund"}'
+POST {{base}}/api/v1/customer/returns
+Authorization: Bearer {{customer_token}}
+Content-Type: application/json
+
+{
+  "externalOrderId": "ORDER123",
+  "items": [
+    {
+      "orderItemId": "COLE_O_ID_DO_ITEM_AQUI",
+      "quantityReturned": 1,
+      "reason": "Produto com defeito"
+    }
+  ],
+  "resolutionType": "Refund"
+}
+
+
+### Listar devoluções do cliente
+# curl http://localhost:8080/api/v1/customer/returns \
+#   -H "Authorization: Bearer $CUSTOMER_TOKEN"
+GET {{base}}/api/v1/customer/returns
+Authorization: Bearer {{customer_token}}
+
+
+### Detalhe de uma devolução
+# curl http://localhost:8080/api/v1/customer/returns/RETURN_ID \
+#   -H "Authorization: Bearer $CUSTOMER_TOKEN"
+GET {{base}}/api/v1/customer/returns/{{return_id}}
+Authorization: Bearer {{customer_token}}
+
+
+### Baixar etiqueta de envio (abre/baixa o PDF)
+# curl -L http://localhost:8080/api/v1/customer/returns/RETURN_ID/label \
+#   -H "Authorization: Bearer $CUSTOMER_TOKEN" \
+#   -o etiqueta.pdf
+GET {{base}}/api/v1/customer/returns/{{return_id}}/label
+Authorization: Bearer {{customer_token}}
+
+
+### Confirmar que o pacote foi postado
+# curl -X POST http://localhost:8080/api/v1/customer/returns/RETURN_ID/confirm-posted \
+#   -H "Authorization: Bearer $CUSTOMER_TOKEN"
+POST {{base}}/api/v1/customer/returns/{{return_id}}/confirm-posted
+Authorization: Bearer {{customer_token}}
+
+
+# ============================================================
+# DEVOLUÇÕES — ADMIN
+# ============================================================
+
+### Listar todas as devoluções (com filtros opcionais)
+# curl "http://localhost:8080/api/v1/admin/returns?status=InTransit&page=1&pageSize=20" \
+#   -H "Authorization: Bearer $ADMIN_TOKEN"
+GET {{base}}/api/v1/admin/returns?page=1&pageSize=20
+Authorization: Bearer {{admin_token}}
+
+
+### Filtrar por status
+# Valores possíveis: Draft, PendingLabel, LabelGenerated, InTransit,
+#                    Delivered, QualityApproved, QualityRejected,
+#                    PendingRefund, PendingVoucher, ClosedRefund,
+#                    ClosedExchange, ClosedRejected, Cancelled
+GET {{base}}/api/v1/admin/returns?status=InTransit
+Authorization: Bearer {{admin_token}}
+
+
+### Estatísticas (contagem por status)
+# curl http://localhost:8080/api/v1/admin/returns/stats \
+#   -H "Authorization: Bearer $ADMIN_TOKEN"
+GET {{base}}/api/v1/admin/returns/stats
+Authorization: Bearer {{admin_token}}
+
+
+### Detalhe de uma devolução (admin)
+# curl http://localhost:8080/api/v1/admin/returns/RETURN_ID \
+#   -H "Authorization: Bearer $ADMIN_TOKEN"
+GET {{base}}/api/v1/admin/returns/{{return_id}}
+Authorization: Bearer {{admin_token}}
+
+
+### Avaliar qualidade do item recebido (requer role: QualityInspector ou Supervisor)
+# curl -X PATCH http://localhost:8080/api/v1/admin/returns/RETURN_ID/quality \
+#   -H "Authorization: Bearer $ADMIN_TOKEN" \
+#   -H "Content-Type: application/json" \
+#   -d '{"result":"Approved","notes":"Item em bom estado","damageImageKeys":[]}'
+PATCH {{base}}/api/v1/admin/returns/{{return_id}}/quality
+Authorization: Bearer {{admin_token}}
+Content-Type: application/json
+
+{
+  "result": "Approved",
+  "notes": "Item em bom estado, sem avarias visíveis",
+  "damageImageKeys": []
+}
+
+
+### Avaliar qualidade — reprovado com fotos de avaria
+PATCH {{base}}/api/v1/admin/returns/{{return_id}}/quality
+Authorization: Bearer {{admin_token}}
+Content-Type: application/json
+
+{
+  "result": "Rejected",
+  "notes": "Item com avaria grave — rasgado na lateral",
+  "damageImageKeys": ["damage-proofs/ID_DA_DEVOLUCAO/foto1.jpg"]
+}
+
+
+### Cancelar devolução (requer role: Supervisor ou Agent)
+# curl -X POST http://localhost:8080/api/v1/admin/returns/RETURN_ID/cancel \
+#   -H "Authorization: Bearer $ADMIN_TOKEN"
+POST {{base}}/api/v1/admin/returns/{{return_id}}/cancel
+Authorization: Bearer {{admin_token}}
+
+
+### Simular geração de etiqueta sem RabbitMQ (requer role: Supervisor — só para dev/testes)
+# curl -X POST http://localhost:8080/api/v1/admin/returns/RETURN_ID/simulate-label \
+#   -H "Authorization: Bearer $ADMIN_TOKEN"
+POST {{base}}/api/v1/admin/returns/{{return_id}}/simulate-label
+Authorization: Bearer {{admin_token}}
+
+
+### Simular entrega sem webhook (requer role: Supervisor — só para dev/testes)
+# curl -X POST http://localhost:8080/api/v1/admin/returns/RETURN_ID/simulate-delivery \
+#   -H "Authorization: Bearer $ADMIN_TOKEN"
+POST {{base}}/api/v1/admin/returns/{{return_id}}/simulate-delivery
+Authorization: Bearer {{admin_token}}
+
+
+# ============================================================
+# UPLOAD DE FOTOS DE AVARIA
+# ============================================================
+
+### Fazer upload de fotos de avaria (requer role: QualityInspector ou Supervisor)
+# Retorna os damageImageKeys para usar na avaliação de qualidade
+#
+# curl -X POST http://localhost:8080/api/v1/uploads/damage-images \
+#   -H "Authorization: Bearer $ADMIN_TOKEN" \
+#   -F "files=@/caminho/para/foto.jpg"
+POST {{base}}/api/v1/uploads/damage-images
+Authorization: Bearer {{admin_token}}
+Content-Type: multipart/form-data; boundary=----boundary
+
+------boundary
+Content-Disposition: form-data; name="files"; filename="avaria.jpg"
+Content-Type: image/jpeg
+
+< ./avaria.jpg
+------boundary--
+
+
+# ============================================================
+# WEBHOOK DA TRANSPORTADORA (simulação)
+# ============================================================
+
+### Simular notificação de entrega da transportadora
+# Em produção, esse endpoint é chamado pela transportadora automaticamente.
+# Aqui simulamos uma entrega para o carrier "correios".
+#
+# curl -X POST http://localhost:8080/api/v1/webhooks/carrier/correios \
+#   -H "Content-Type: application/json" \
+#   -H "X-Carrier-Signature: assinatura-hmac-aqui" \
+#   -d '{"trackingCode":"BR123456789BR","event":"delivered","occurredAt":"2026-05-26T15:00:00Z"}'
+POST {{base}}/api/v1/webhooks/carrier/correios
+Content-Type: application/json
+X-Carrier-Signature: assinatura-de-teste
+
+{
+  "trackingCode": "BR123456789BR",
+  "event": "delivered",
+  "occurredAt": "2026-05-26T15:00:00Z"
+}
+
+
+# ============================================================
+# FLUXO COMPLETO DE TESTE (passo a passo)
+# ============================================================
+#
+# 1. Health check                    → GET  /health
+# 2. Login admin                     → POST /api/v1/auth/admin/login
+# 3. Login cliente                   → POST /api/v1/auth/customer/login
+# 4. Listar pedidos do cliente       → GET  /api/v1/customer/orders
+# 5. Criar devolução                 → POST /api/v1/customer/returns
+# 6. (Admin) Simular etiqueta        → POST /api/v1/admin/returns/{id}/simulate-label
+# 7. Cliente confirma postagem       → POST /api/v1/customer/returns/{id}/confirm-posted
+# 8. (Admin) Simular entrega         → POST /api/v1/admin/returns/{id}/simulate-delivery
+# 9. (Admin) Upload foto de avaria   → POST /api/v1/uploads/damage-images
+# 10.(Admin) Avaliar qualidade       → PATCH /api/v1/admin/returns/{id}/quality
+# 11. Ver estatísticas               → GET  /api/v1/admin/returns/stats
+#
+# ============================================================

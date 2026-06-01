@@ -1,0 +1,293 @@
+{
+  "schemaVersion": "3.3",
+  "metadata": {
+    "title": "feat: API-First Platform — Backend",
+    "type": "feat",
+    "branchName": "feat/api-first-platform-backend",
+    "createdAt": "2026-05-22",
+    "planPath": null,
+    "brainstormPath": ".aimi/brainstorms/2026-05-22-api-first-platform-brainstorm.md",
+    "researchDepth": "standard",
+    "researchPaths": [
+      ".aimi/research/2026-05-22-api-first-platform-164730-best-practices.md",
+      ".aimi/research/2026-05-22-api-first-platform-170739-learnings.md"
+    ],
+    "decisions": [
+      {
+        "anchor": "specFlow:CriticalQ3",
+        "source": "specFlow:CriticalQ3",
+        "text": "Should WebhooksController be excluded from URL versioning?",
+        "resolution": "Version webhooks too (/api/v1/webhooks/...) — adapters are mocked in Phase 3, no real carrier registrations to break"
+      },
+      {
+        "anchor": "specFlow:CriticalQ5",
+        "source": "specFlow:CriticalQ5",
+        "text": "When backend versioning is deployed, must both backend and frontend deploy together, or should old routes stay alive temporarily?",
+        "resolution": "Coordinated deploy — old /api/... routes removed immediately, no compatibility aliases"
+      },
+      {
+        "anchor": "specFlow:CriticalQ6",
+        "source": "specFlow:CriticalQ6",
+        "text": "Should admin users get refresh tokens so internal tools do not force re-login every 15 minutes?",
+        "resolution": "Add admin refresh tokens matching customer flow"
+      }
+    ],
+    "maxConcurrency": 5
+  },
+  "userStories": [
+    {
+      "id": "US-002",
+      "title": "Install versioning and Swagger NuGet packages and wire infrastructure",
+      "description": "As a La Moda backend developer, I want Asp.Versioning.Http and Swashbuckle packages installed and the versioning infrastructure registered in Program.cs so that subsequent stories can apply versioned routes and Swagger docs without conflicts.",
+      "acceptanceCriteria": [
+        "DevolveFacill.Api.csproj contains PackageReference entries for Asp.Versioning.Http 8.1.0, Asp.Versioning.Mvc.ApiExplorer 8.1.0, and Swashbuckle.AspNetCore 6.5.0",
+        "DevolveFacill.Api.csproj has GenerateDocumentationFile set to true inside the PropertyGroup",
+        "Program.cs calls builder.Services.AddEndpointsApiExplorer()",
+        "Program.cs calls builder.Services.AddApiVersioning with DefaultApiVersion = new ApiVersion(1, 0), AssumeDefaultVersionWhenUnspecified = true, ReportApiVersions = true, and ApiVersionReader = new UrlSegmentApiVersionReader()",
+        "The AddApiVersioning call is chained with .AddApiExplorer with GroupNameFormat = 'vVVV' and SubstituteApiVersionInUrl = true",
+        "Program.cs has using Asp.Versioning and using Microsoft.OpenApi.Models at the top of the file",
+        "dotnet build Src/DevolveFacill.Api/ succeeds with zero errors",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "status": "completed",
+      "dependsOn": [],
+      "notes": "Use Asp.Versioning.Http — NOT the deprecated Microsoft.AspNetCore.Mvc.Versioning package which produces confusing errors on .NET 8. Both Asp.Versioning.Http and Asp.Versioning.Mvc.ApiExplorer are required; the ApiExplorer package is what allows Swashbuckle to enumerate per-version documents.\n\nINSERTION POINT: In Program.cs, the new service registrations go after line 165 (builder.Services.AddHealthChecks().AddDbContextCheck), immediately before var app = builder.Build() at line 167. The existing service registration order is: AddControllers (line 160-163) -> AddHealthChecks (line 164-165) -> [INSERT HERE] -> builder.Build().\n\nNew usings required at top of Program.cs: using Asp.Versioning and using Microsoft.OpenApi.Models.",
+      "wave": 1,
+      "implementation": {
+        "files": [
+          "Src/DevolveFacill.Api/DevolveFacill.Api.csproj",
+          "Src/DevolveFacill.Api/Program.cs"
+        ],
+        "approach": "Add three PackageReference entries to the .csproj and enable XML doc generation. In Program.cs, add the two new using statements at the top, then after the existing AddHealthChecks() call (line 165), add AddEndpointsApiExplorer, then AddApiVersioning(...).AddApiExplorer(...). Use UrlSegmentApiVersionReader — no header or query-string readers needed for this phase.",
+        "verify": "dotnet build Src/DevolveFacill.Api/DevolveFacill.Api.csproj"
+      },
+      "verification": {
+        "strategy": "test",
+        "status": "pending",
+        "expect": "dotnet build exits 0 with no errors or warnings about missing versioning configuration"
+      },
+      "tasks": [
+        "Add PackageReference for Asp.Versioning.Http version 8.1.0 to DevolveFacill.Api.csproj",
+        "Add PackageReference for Asp.Versioning.Mvc.ApiExplorer version 8.1.0 to DevolveFacill.Api.csproj",
+        "Add PackageReference for Swashbuckle.AspNetCore version 6.5.0 to DevolveFacill.Api.csproj",
+        "Add GenerateDocumentationFile set to true inside the first PropertyGroup in DevolveFacill.Api.csproj",
+        "Add 'using Asp.Versioning;' and 'using Microsoft.OpenApi.Models;' to the top of Program.cs",
+        "Add builder.Services.AddEndpointsApiExplorer() in Program.cs after the AddHealthChecks() call at line 165",
+        "Add builder.Services.AddApiVersioning with DefaultApiVersion = new ApiVersion(1, 0), AssumeDefaultVersionWhenUnspecified = true, ReportApiVersions = true, ApiVersionReader = new UrlSegmentApiVersionReader(), chained with .AddApiExplorer with GroupNameFormat = 'vVVV' and SubstituteApiVersionInUrl = true",
+        "Run dotnet build Src/DevolveFacill.Api/ and confirm zero errors"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Apply versioned routes to all seven API controllers",
+      "description": "As a La Moda backend developer, I want all seven controllers to declare [ApiVersion(\"1.0\")] and update their [Route] templates to include the version segment so that all endpoints are accessible under /api/v1/ and old unversioned routes return 404.",
+      "acceptanceCriteria": [
+        "All seven controllers (AuthController, AdminAuthController, CustomerOrdersController, CustomerReturnsController, AdminReturnsController, WebhooksController, UploadsController) have the [ApiVersion(\"1.0\")] attribute on the class",
+        "All seven controllers have [Route] templates containing the segment v{version:apiVersion} — e.g. [Route(\"api/v{version:apiVersion}/auth\")]",
+        "WebhooksController has [EnableCors(\"WebhookPolicy\")] added at class level so carrier callbacks bypass the FrontendPolicy origin restriction",
+        "POST /api/v1/auth/customer/login returns 400 or 200 (route resolves) — POST /api/auth/customer/login returns 404",
+        "GET /api/v1/customer/orders with a valid customer JWT returns 200 — GET /api/customer/orders returns 404",
+        "POST /api/v1/webhooks/carrier/mock is reachable (all controllers including WebhooksController are versioned)",
+        "GET /health remains at /health with no version prefix (it is mapped outside MapControllers and must not be changed)",
+        "Each action method has at least one [ProducesResponseType] attribute for Swagger documentation accuracy",
+        "AdminReturnsController method-level [Authorize] attributes on individual actions are NOT modified — only the class-level [Route] and new [ApiVersion] are changed",
+        "CustomerReturnsController.GetReturn action name is NOT changed — CreatedAtAction(nameof(GetReturn)) in the same controller references it correctly and remains valid after the route template change",
+        "dotnet build succeeds with zero errors",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "status": "completed",
+      "dependsOn": [
+        "US-002"
+      ],
+      "notes": "Route attribute change pattern for every controller: replace [Route(\"api/X\")] with [Route(\"api/v{version:apiVersion}/X\")]. Do NOT add the full versioned prefix to the individual action [HttpGet]/[HttpPost] attributes — only the class-level [Route] needs the version segment. WebhooksController receives [ApiVersion] like all others (decision: version webhooks since adapters are mocked in Phase 3) AND also needs [EnableCors(\"WebhookPolicy\")] at class level.\n\nSAFETY NOTE — AdminReturnsController: This controller has method-level [Authorize] attributes on 4 individual actions (in addition to the class-level [Authorize]). Do NOT touch these — only add [ApiVersion(\"1.0\")] and change the class-level [Route]. The existing authorization structure must be preserved exactly.\n\nSAFETY NOTE — CustomerReturnsController.CreatedAtAction: The controller uses CreatedAtAction(nameof(GetReturn), ...) which references an action in the same controller. This remains valid after the class-level route change — no action method rename needed.",
+      "wave": 2,
+      "implementation": {
+        "files": [
+          "Src/DevolveFacill.Api/Controllers/AuthController.cs",
+          "Src/DevolveFacill.Api/Controllers/AdminAuthController.cs",
+          "Src/DevolveFacill.Api/Controllers/CustomerOrdersController.cs",
+          "Src/DevolveFacill.Api/Controllers/CustomerReturnsController.cs",
+          "Src/DevolveFacill.Api/Controllers/AdminReturnsController.cs",
+          "Src/DevolveFacill.Api/Controllers/WebhooksController.cs",
+          "Src/DevolveFacill.Api/Controllers/UploadsController.cs"
+        ],
+        "approach": "For each controller: (1) change the class-level [Route] attribute to include v{version:apiVersion} in the path, (2) add [ApiVersion(\"1.0\")] to the class, (3) add [ProducesResponseType] to each action. Additionally for WebhooksController: add [EnableCors(\"WebhookPolicy\")] at class level. Do not modify [HttpGet]/[HttpPost] route parameters on individual actions.",
+        "verify": "curl -s -o /dev/null -w \"%{http_code}\" -X POST http://localhost:8080/api/v1/auth/customer/login -H \"Content-Type: application/json\" -d '{\"cpf\":\"test\",\"password\":\"test\"}'"
+      },
+      "verification": {
+        "strategy": "api",
+        "status": "pending",
+        "url": "http://localhost:8080/api/v1/auth/customer/login",
+        "expect": "POST returns 400 or 200 (route resolves); old POST /api/auth/customer/login returns 404"
+      },
+      "tasks": [
+        "Update AuthController.cs: change [Route(\"api/auth\")] to [Route(\"api/v{version:apiVersion}/auth\")] and add [ApiVersion(\"1.0\")]",
+        "Update AdminAuthController.cs: change [Route(\"api/auth/admin\")] to [Route(\"api/v{version:apiVersion}/auth/admin\")] and add [ApiVersion(\"1.0\")]",
+        "Update CustomerOrdersController.cs: change [Route(\"api/customer/orders\")] to [Route(\"api/v{version:apiVersion}/customer/orders\")] and add [ApiVersion(\"1.0\")]",
+        "Update CustomerReturnsController.cs: change [Route(\"api/customer/returns\")] to [Route(\"api/v{version:apiVersion}/customer/returns\")] and add [ApiVersion(\"1.0\")] — do not rename GetReturn action",
+        "Update AdminReturnsController.cs: change [Route(\"api/admin/returns\")] to [Route(\"api/v{version:apiVersion}/admin/returns\")] and add [ApiVersion(\"1.0\")] — do NOT touch any method-level [Authorize] attributes",
+        "Update WebhooksController.cs: change [Route(\"api/webhooks\")] to [Route(\"api/v{version:apiVersion}/webhooks\")], add [ApiVersion(\"1.0\")], and add [EnableCors(\"WebhookPolicy\")] at class level",
+        "Update UploadsController.cs: change [Route(\"api/uploads\")] to [Route(\"api/v{version:apiVersion}/uploads\")] and add [ApiVersion(\"1.0\")]",
+        "Add [ProducesResponseType] attributes with appropriate status codes to each action method across all seven controllers",
+        "Run dotnet build Src/DevolveFacill.Api/ and confirm zero errors",
+        "Start the app with docker compose up --build api -d and verify old route /api/auth/customer/login returns 404 and new /api/v1/auth/customer/login returns 400 or 200"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Add Swagger UI with per-version OpenAPI docs and Bearer auth",
+      "description": "As a La Moda backend developer, I want Swagger UI available at /swagger so that internal app teams can explore and test all versioned API endpoints with Bearer token authentication without needing a separate tool.",
+      "acceptanceCriteria": [
+        "GET /swagger returns 200 with the Swagger UI HTML page when running in Development or Staging environment",
+        "GET /swagger/v1/swagger.json returns a valid OpenAPI 3.x JSON document",
+        "All seven controllers' routes appear in the v1 Swagger document",
+        "An 'Authorize' dialog with Bearer JWT scheme is present in the Swagger UI (security definition added to SwaggerGen)",
+        "The UseSwagger() and UseSwaggerUI() middleware calls are wrapped in if (app.Environment.IsDevelopment() || app.Environment.IsStaging()) — Swagger is not served in Production",
+        "Swagger middleware is placed in the pipeline BETWEEN app.UseCors(\"FrontendPolicy\") and app.UseAuthentication() — not before UseCors and not after UseAuthorization",
+        "XML comments from controller action summaries appear as descriptions in the Swagger doc (IncludeXmlComments wired with a File.Exists guard to avoid startup crash when XML file is absent)",
+        "dotnet build succeeds with zero errors",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "status": "completed",
+      "dependsOn": [
+        "US-002",
+        "US-003"
+      ],
+      "notes": "MIDDLEWARE PLACEMENT: Swagger middleware must go BETWEEN app.UseCors(\"FrontendPolicy\") and app.UseAuthentication() in the pipeline. Do NOT place it before UseCors (CORS headers would be missing on Swagger responses) and not after UseAuthentication (would cause auth challenges on swagger.json requests). The exact insertion point in the current pipeline:\n  app.UseCors(\"FrontendPolicy\");\n  [INSERT: if (app.Environment.IsDevelopment() || ...) { UseSwagger(); UseSwaggerUI(); }]\n  app.UseAuthentication();\n  app.UseAuthorization();\n  app.MapControllers();\n\nDEVELOPMENT ENV: Docker Compose already sets ASPNETCORE_ENVIRONMENT=Development via environment section — no additional config needed. The IsDevelopment() check will be true when running via docker compose up.\n\nXML FILE GUARD: The XML doc file is only generated after a successful build. Add a File.Exists guard before calling IncludeXmlComments to avoid a startup crash on clean checkouts. Pattern: var xmlPath = Path.Combine(AppContext.BaseDirectory, \"DevolveFacill.Api.xml\"); if (File.Exists(xmlPath)) opt.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);\n\nNote: US-003 must be complete first so controllers have [ApiVersion] attributes and Swashbuckle can correctly group them under v1.",
+      "wave": 3,
+      "implementation": {
+        "files": [
+          "Src/DevolveFacill.Api/Program.cs"
+        ],
+        "approach": "In Program.cs service registrations: add AddSwaggerGen with a SwaggerDoc for v1, an OpenApiSecurityScheme for Bearer JWT, and IncludeXmlComments with File.Exists guard pointing to the generated XML file. In the middleware pipeline, inside an IsDevelopment || IsStaging guard placed BETWEEN UseCors(\"FrontendPolicy\") and UseAuthentication: add UseSwagger() and UseSwaggerUI with SwaggerEndpoint for /swagger/v1/swagger.json.",
+        "verify": "curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/swagger/v1/swagger.json"
+      },
+      "verification": {
+        "strategy": "api",
+        "status": "pending",
+        "url": "http://localhost:8080/swagger/v1/swagger.json",
+        "expect": "GET returns 200 with a JSON body containing an OpenAPI spec with all seven controller route groups"
+      },
+      "tasks": [
+        "Add builder.Services.AddSwaggerGen to Program.cs service registrations (after AddApiVersioning block from US-002), including SwaggerDoc for v1 with title DevolveFacil API and version v1",
+        "Inside AddSwaggerGen add Bearer security definition: AddSecurityDefinition with scheme bearer, type Http, BearerFormat JWT, In Header; and AddSecurityRequirement referencing it",
+        "Inside AddSwaggerGen add XML comments wiring with File.Exists guard: compute xmlPath as Path.Combine(AppContext.BaseDirectory, DevolveFacill.Api.xml) and call IncludeXmlComments only if the file exists",
+        "In the middleware pipeline, after app.UseCors(\"FrontendPolicy\") and BEFORE app.UseAuthentication(), add an environment check block containing app.UseSwagger() and app.UseSwaggerUI with SwaggerEndpoint for /swagger/v1/swagger.json",
+        "Start the app and verify GET http://localhost:8080/swagger/v1/swagger.json returns 200 with all seven controller routes listed",
+        "Verify the Swagger UI at http://localhost:8080/swagger shows an Authorize button and all endpoints"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Replace default CORS policy with named policies and remove AllowCredentials",
+      "description": "As a La Moda backend developer, I want named CORS policies per consumer class so that multiple app origins can be configured independently, AllowCredentials is removed (JWT uses Authorization header, not cookies), and new consumer origins can be added via configuration without code changes.",
+      "acceptanceCriteria": [
+        "Program.cs calls app.UseCors(\"FrontendPolicy\") — not app.UseCors() with the implicit default policy",
+        "AllowCredentials() does not appear anywhere in the CORS configuration in Program.cs",
+        "A FrontendPolicy is defined that calls WithOrigins(mergedOrigins).AllowAnyHeader().AllowAnyMethod() with no AllowCredentials()",
+        "A WebhookPolicy is defined that calls AllowAnyOrigin().AllowAnyHeader().WithMethods(\"POST\") — this never combines AllowAnyOrigin with AllowCredentials",
+        "WebhooksController has [EnableCors(\"WebhookPolicy\")] at class level (applied in US-003) so carrier callbacks bypass the FrontendPolicy origin restriction",
+        "The variable mergedOrigins is constructed by combining Cors:AllowedOrigins and Cors:ConsumerOrigins from appsettings.json",
+        "appsettings.json has a Cors.ConsumerOrigins key with an empty array as default value",
+        "HTTP OPTIONS preflight from http://localhost:5173 returns Access-Control-Allow-Origin: http://localhost:5173",
+        "HTTP request from an origin not in the combined allowlist is rejected with a missing Access-Control-Allow-Origin header",
+        "AllowAnyOrigin and AllowCredentials are never combined in the same policy (grep check in Program.cs)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "status": "completed",
+      "dependsOn": [
+        "US-002"
+      ],
+      "notes": "The new consumer app's origin URL is not yet known (deferred in brainstorm). Cors:ConsumerOrigins starts as an empty array — when the new app's production/staging origins are confirmed, they are added to appsettings.json without code changes.\n\nAllowCredentials() is removed from FrontendPolicy because the Axios client sends Bearer tokens via Authorization header, not browser cookies — AllowCredentials() provides no benefit with JWT and unnecessarily constrains CORS flexibility.\n\nWEBHOOK POLICY: Use AllowAnyHeader() instead of restricting to specific headers for WebhookPolicy. Real carrier webhook callbacks (Correios, VTEX) send varied header sets and restricting to specific headers would silently reject legitimate callbacks. AllowAnyOrigin + AllowCredentials is forbidden by the browser security model — this combination is safe here because AllowCredentials() is never called on WebhookPolicy.\n\nWEBHOOKSCONTROLLER CORS: The [EnableCors(\"WebhookPolicy\")] attribute is applied to WebhooksController in US-003. This story does not touch controller files — it only configures the policy in Program.cs and appsettings.json.",
+      "wave": 2,
+      "implementation": {
+        "files": [
+          "Src/DevolveFacill.Api/Program.cs",
+          "appsettings.json"
+        ],
+        "approach": "In Program.cs, replace the single AddDefaultPolicy block with two AddPolicy calls: FrontendPolicy (merges AllowedOrigins + ConsumerOrigins, no AllowCredentials) and WebhookPolicy (AllowAnyOrigin + AllowAnyHeader + POST only). Change app.UseCors() to app.UseCors(\"FrontendPolicy\"). In appsettings.json, add ConsumerOrigins: [] alongside the existing AllowedOrigins array.",
+        "verify": "curl -s -I -X OPTIONS -H \"Origin: http://localhost:5173\" -H \"Access-Control-Request-Method: POST\" http://localhost:8080/api/v1/customer/returns"
+      },
+      "verification": {
+        "strategy": "api",
+        "status": "pending",
+        "url": "http://localhost:8080/api/v1/customer/returns",
+        "expect": "OPTIONS preflight from localhost:5173 returns Access-Control-Allow-Origin: http://localhost:5173; request from unlisted origin returns no CORS headers"
+      },
+      "tasks": [
+        "In Program.cs, read both Cors:AllowedOrigins and Cors:ConsumerOrigins from config and merge into a single string array called mergedOrigins using Concat and ToArray",
+        "Replace builder.Services.AddCors with AddDefaultPolicy with two named policies: AddPolicy for FrontendPolicy using WithOrigins(mergedOrigins).AllowAnyHeader().AllowAnyMethod() with no AllowCredentials",
+        "Add AddPolicy for WebhookPolicy using AllowAnyOrigin().AllowAnyHeader().WithMethods(\"POST\") — do NOT add AllowCredentials",
+        "Change app.UseCors() to app.UseCors(\"FrontendPolicy\") in the middleware pipeline",
+        "Add ConsumerOrigins key with an empty array inside the Cors object in appsettings.json",
+        "Verify grep for AllowCredentials in Program.cs returns no results",
+        "Start the app and run curl -I -X OPTIONS with Origin localhost:5173 against /api/v1/customer/returns — confirm Access-Control-Allow-Origin header is present",
+        "Run the same curl with Origin http://evil.example.com — confirm Access-Control-Allow-Origin header is absent"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Add refresh token support to admin authentication flow",
+      "description": "As a La Moda backend developer, I want admin users to receive and use refresh tokens so that internal apps and portals built on the API do not force admin re-authentication every 15 minutes.",
+      "acceptanceCriteria": [
+        "POST /api/v1/auth/admin/login response body includes a non-null refreshToken string",
+        "POST /api/v1/auth/admin/refresh with a valid admin refresh token returns a new AuthResponse with fresh accessToken and refreshToken",
+        "POST /api/v1/auth/admin/refresh with an expired or revoked refresh token returns 401",
+        "The admin refresh token is invalidated after use (token rotation — the old token cannot be reused)",
+        "Admin refresh tokens are persisted to the database and survive app restarts",
+        "AdminRefreshToken entity has fields: Id (Guid), AdminUserId (Guid FK to AdminUser), Token (string — raw base64, NOT hashed), ExpiresAt (DateTimeOffset), CreatedAt (DateTimeOffset), IsRevoked (bool) — matching the CustomerRefreshToken pattern exactly",
+        "A new EF Core migration is created: dotnet ef migrations add AddAdminRefreshToken --project Src/DevolveFacill.Infrastructure --startup-project Src/DevolveFacill.Api",
+        "Program.cs switches from db.Database.EnsureCreatedAsync() to db.Database.MigrateAsync() so migrations are applied on startup",
+        "dotnet ef migrations list shows the new migration at the top after applying",
+        "The admin refresh flow uses the same token lifetime as the existing customer flow (7-day refresh token expiry)",
+        "dotnet build succeeds with zero errors",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "status": "completed",
+      "dependsOn": [
+        "US-002",
+        "US-003"
+      ],
+      "notes": "ENTITY DESIGN — match CustomerRefreshToken exactly: Token field stores the raw base64 string (NOT BCrypt-hashed), IsRevoked is a bool flag (NOT a nullable RevokedAt DateTimeOffset). This is the actual pattern used by the existing CustomerRefreshToken entity in the codebase. The FK property name must be AdminUserId (not AdminId) to follow the existing convention from CustomerRefreshToken which uses CustomerId.\n\nFILE PATHS:\n- Entity: Src/DevolveFacill.Core/Domain/Entities/AdminRefreshToken.cs (in Domain/Entities/ subfolder, not Entities/ directly)\n- Configuration: Src/DevolveFacill.Infrastructure/Persistence/Configurations/AdminRefreshTokenConfiguration.cs (follow IEntityTypeConfiguration pattern with table name admin_refresh_tokens)\n- Repository: Src/DevolveFacill.Infrastructure/Repositories/AdminRefreshTokenRepository.cs\n- DbContext: Src/DevolveFacill.Infrastructure/Persistence/AppDbContext.cs (add DbSet for AdminRefreshToken)\n\nMIGRATION REQUIREMENT: This is the first EF Core migration for the project (currently using EnsureCreatedAsync). Program.cs must be updated to call MigrateAsync() instead of EnsureCreatedAsync() so the migration is applied automatically on startup. Without this switch, the AdminRefreshTokens table will not be created even if the migration file exists.\n\nTOKEN STORAGE: Store the raw token string in the Token column (same as CustomerRefreshToken). Lookup is by exact string match using FirstOrDefaultAsync filtering by Token == token, IsRevoked == false, and ExpiresAt > DateTimeOffset.UtcNow. No BCrypt hashing needed — the token is a cryptographically random base64 string (sufficient entropy without hashing).",
+      "wave": 3,
+      "implementation": {
+        "files": [
+          "Src/DevolveFacill.Core/Domain/Entities/AdminRefreshToken.cs",
+          "Src/DevolveFacill.Infrastructure/Persistence/AppDbContext.cs",
+          "Src/DevolveFacill.Infrastructure/Persistence/Configurations/AdminRefreshTokenConfiguration.cs",
+          "Src/DevolveFacill.Infrastructure/Repositories/AdminRefreshTokenRepository.cs",
+          "Src/DevolveFacill.Api/Controllers/AdminAuthController.cs",
+          "Src/DevolveFacill.Api/Program.cs"
+        ],
+        "approach": "Create AdminRefreshToken entity in Core/Domain/Entities/ with fields matching CustomerRefreshToken (Token as raw string, IsRevoked as bool, AdminUserId as Guid FK). Add IEntityTypeConfiguration for the entity (table: admin_refresh_tokens). Add DbSet to AppDbContext. Create AdminRefreshTokenRepository with SaveAsync, FindRefreshTokenAsync, and RevokeAsync methods. Update AdminAuthController.Login to generate a random base64 token via RandomNumberGenerator.GetBytes(64), persist it, and return it in AuthResponse. Add HttpPost refresh action to AdminAuthController. Update Program.cs: switch EnsureCreatedAsync to MigrateAsync. Generate migration.",
+        "verify": "dotnet ef migrations list --project Src/DevolveFacill.Infrastructure --startup-project Src/DevolveFacill.Api"
+      },
+      "verification": {
+        "strategy": "api",
+        "status": "pending",
+        "url": "http://localhost:8080/api/v1/auth/admin/refresh",
+        "expect": "POST with valid admin refresh token returns 200 with new accessToken and refreshToken; old refresh token returns 401"
+      },
+      "tasks": [
+        "Create Src/DevolveFacill.Core/Domain/Entities/AdminRefreshToken.cs with properties: Id (Guid), AdminUserId (Guid FK), AdminUser (AdminUser navigation property), Token (string — raw base64), CreatedAt (DateTimeOffset), ExpiresAt (DateTimeOffset), IsRevoked (bool) — mirror CustomerRefreshToken exactly",
+        "Create Src/DevolveFacill.Infrastructure/Persistence/Configurations/AdminRefreshTokenConfiguration.cs implementing IEntityTypeConfiguration for AdminRefreshToken, mapped to table admin_refresh_tokens, with FK to AdminUser configured",
+        "Add public DbSet property for AdminRefreshToken to AppDbContext.cs in Infrastructure",
+        "Create Src/DevolveFacill.Infrastructure/Repositories/AdminRefreshTokenRepository.cs as a standalone class (no interface) registered as AddScoped — with methods SaveAsync, FindRefreshTokenAsync (filtering by Token, IsRevoked=false, ExpiresAt > UtcNow), and RevokeAsync",
+        "Register AdminRefreshTokenRepository in Program.cs via builder.Services.AddScoped",
+        "Inject AdminRefreshTokenRepository into AdminAuthController via constructor",
+        "Update AdminAuthController.Login: generate raw token with Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)), create AdminRefreshToken with Token=rawToken, ExpiresAt=UtcNow+7days, IsRevoked=false, call SaveAsync, return AuthResponse with the raw token in the refreshToken field",
+        "Add [HttpPost(\"refresh\")] action to AdminAuthController: read refreshToken from [FromBody] RefreshTokenRequest, call FindRefreshTokenAsync, return 401 if null, set IsRevoked=true and call RevokeAsync on old token, generate new JWT via JwtService, generate new refresh token, call SaveAsync, return new AuthResponse",
+        "Update Program.cs: change db.Database.EnsureCreatedAsync() to db.Database.MigrateAsync() in the startup data seeding block",
+        "Generate EF Core migration: dotnet ef migrations add AddAdminRefreshToken --project Src/DevolveFacill.Infrastructure --startup-project Src/DevolveFacill.Api",
+        "Run dotnet build Src/DevolveFacill.Api/ — confirm zero errors",
+        "Start the app with docker compose up --build api -d — confirm admin_refresh_tokens table is created",
+        "Test the full flow: POST /api/v1/auth/admin/login to capture refreshToken, then POST /api/v1/auth/admin/refresh to confirm new token pair is returned and old refreshToken is revoked"
+      ]
+    }
+  ]
+}
